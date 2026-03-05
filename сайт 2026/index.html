@@ -1,0 +1,196 @@
+.<!DOCTYPE html>
+<html lang="ky">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoes Secure ERP - Cloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <div id="authSection" class="flex items-center justify-center min-h-screen p-6">
+        <div class="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md border border-gray-100">
+            <div class="text-center mb-8">
+                <span class="text-5xl">👟</span>
+                <h2 class="text-3xl font-extrabold text-gray-800 mt-4">Shoes Cloud</h2>
+                <p class="text-gray-400 text-sm mt-2">Бизнес үчүн коопсуз башкаруу</p>
+            </div>
+            
+            <div class="space-y-4">
+                <input type="email" id="email" placeholder="Электрондук почта" class="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <input type="password" id="password" placeholder="Пароль" class="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-blue-500 transition">
+                
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                    <button onclick="handleAuth('login')" class="bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-200">Кирүү</button>
+                    <button onclick="handleAuth('register')" class="bg-gray-800 text-white font-bold py-4 rounded-2xl hover:bg-gray-900 transition">Катталуу</button>
+                </div>
+            </div>
+            <p id="authError" class="text-red-500 mt-4 text-center text-sm font-medium"></p>
+        </div>
+    </div>
+
+    <div id="mainSection" class="hidden min-h-screen p-4 md:p-8">
+        <div class="max-w-5xl mx-auto">
+            <nav class="flex justify-between items-center mb-8 bg-white p-5 rounded-3xl shadow-sm">
+                <div>
+                    <h1 id="userEmail" class="text-sm font-bold text-gray-500 truncate max-w-[150px]">...</h1>
+                    <button onclick="logout()" class="text-xs text-red-500 font-bold uppercase tracking-tighter">Системадан чыгуу</button>
+                </div>
+                <div class="bg-blue-50 px-6 py-2 rounded-2xl border border-blue-100">
+                    <p class="text-[10px] text-blue-400 font-bold uppercase">Касса</p>
+                    <h2 id="totalProfit" class="text-xl font-black text-blue-700">0 с.</h2>
+                </div>
+            </nav>
+
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm mb-10 border border-gray-100">
+                <h3 class="font-bold text-gray-700 mb-5 flex items-center">
+                    <span class="mr-2">📝</span> Жаңы товар кошуу
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <input type="text" id="mName" placeholder="Модель (мис: Adidas)" class="p-4 rounded-2xl bg-gray-50 outline-none focus:ring-2 focus:ring-blue-400">
+                    <input type="text" id="mColor" placeholder="Өңү" class="p-4 rounded-2xl bg-gray-50 outline-none">
+                    <input type="number" id="mPrice" placeholder="Баасы" class="p-4 rounded-2xl bg-gray-50 outline-none">
+                    <input type="text" id="mSizes" placeholder="42=10, 40=5" class="md:col-span-2 p-4 rounded-2xl bg-gray-50 outline-none">
+                    <input type="file" id="mFile" accept="image/*" class="hidden">
+                    <button onclick="document.getElementById('mFile').click()" class="bg-gray-100 text-gray-600 font-bold py-4 rounded-2xl hover:bg-gray-200">📷 Сүрөт</button>
+                    <button onclick="addShoes()" class="md:col-span-3 bg-blue-600 text-white font-black py-5 rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95">Складка кошуу</button>
+                </div>
+            </div>
+
+            <div id="pList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+    </div>
+
+    <script>
+        // FIREBASE КОНФИГУРАЦИЯҢДЫ БУЛ ЖЕРГЕ КОЙ
+        const firebaseConfig = {
+            apiKey: "СЕНИН_API_KEY",
+            authDomain: "СЕНИН_PROJECT.firebaseapp.com",
+            databaseURL: "https://СЕНИН_PROJECT.firebaseio.com",
+            projectId: "СЕНИН_PROJECT",
+            storageBucket: "СЕНИН_PROJECT.appspot.com",
+            messagingSenderId: "СЕНИН_ID",
+            appId: "СЕНИН_ID"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // 1. Коопсуздук үчүн маалыматтарды "тазалоо" функциясы
+        function sanitize(text) {
+            const div = document.createElement('div');
+            div.innerText = text;
+            return div.innerHTML;
+        }
+
+        // 2. Логин жана Регистрация
+        function handleAuth(type) {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            if(!email || !pass) return alert("Толтуруңуз!");
+
+            const action = type === 'login' 
+                ? auth.signInWithEmailAndPassword(email, pass)
+                : auth.createUserWithEmailAndPassword(email, pass);
+
+            action.catch(err => document.getElementById('authError').innerText = "Ката: " + err.message);
+        }
+
+        function logout() { auth.signOut(); }
+
+        // 3. Колдонуучунун абалын текшерүү
+        auth.onAuthStateChanged(user => {
+            const authSec = document.getElementById('authSection');
+            const mainSec = document.getElementById('mainSection');
+            if (user) {
+                authSec.style.display = 'none';
+                mainSec.style.display = 'block';
+                document.getElementById('userEmail').innerText = user.email;
+                loadData(user.uid);
+            } else {
+                authSec.style.display = 'flex';
+                mainSec.style.display = 'none';
+            }
+        });
+
+        // 4. Маалыматтарды кошуу (Коопсуздук менен)
+        async function addShoes() {
+            const user = auth.currentUser;
+            const file = document.getElementById('mFile').files[0];
+            const sizeStr = document.getElementById('mSizes').value;
+
+            let img = "https://via.placeholder.com/400x300";
+            if(file) {
+                const reader = new FileReader();
+                img = await new Promise(r => { reader.onload=e=>r(e.target.result); reader.readAsDataURL(file); });
+            }
+
+            const sizes = sizeStr.split(',').map(s => {
+                const [sz, ct] = s.split('=');
+                return { size: sanitize(sz.trim()), count: parseInt(ct) || 0 };
+            });
+
+            const newId = Date.now();
+            // Маалыматты колдонуучунун UID'инин астына гана сактайбыз
+            await db.ref(`users/${user.uid}/products/${newId}`).set({
+                name: sanitize(document.getElementById('mName').value),
+                color: sanitize(document.getElementById('mColor').value),
+                price: Number(document.getElementById('mPrice').value),
+                sizes, img, id: newId
+            });
+            alert("Кошулду!");
+        }
+
+        // 5. Маалыматтарды жүктөө (Ар бир колдонуучу өзүнүкүн гана көрөт)
+        function loadData(uid) {
+            db.ref(`users/${uid}/products`).on('value', snap => {
+                const list = document.getElementById('pList');
+                list.innerHTML = '';
+                const data = snap.val();
+                for(let id in data) {
+                    const p = data[id];
+                    list.innerHTML += `
+                        <div class="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 p-4 transition hover:shadow-xl">
+                            <img src="${p.img}" class="w-full h-44 object-cover rounded-2xl mb-4 bg-gray-50">
+                            <h4 class="font-bold text-gray-800 text-lg px-2">${p.name}</h4>
+                            <p class="text-blue-600 font-black text-xl px-2 mb-4">${p.price} сом</p>
+                            <div class="flex flex-wrap gap-2 px-2">
+                                ${p.sizes.map((s, idx) => `
+                                    <button onclick="sell('${id}', ${idx})" class="bg-gray-50 hover:bg-blue-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-bold transition">
+                                        ${s.size} <span class="text-blue-500 ml-1">${s.count}шт</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <button onclick="del('${id}')" class="w-full mt-6 py-2 text-[10px] font-bold text-gray-300 hover:text-red-500 uppercase tracking-[0.2em]">Товарды өчүрүү</button>
+                        </div>
+                    `;
+                }
+            });
+
+            db.ref(`users/${uid}/profit`).on('value', s => {
+                document.getElementById('totalProfit').innerText = (s.val() || 0) + " с.";
+            });
+        }
+
+        async function sell(id, sIdx) {
+            const uid = auth.currentUser.uid;
+            const snap = await db.ref(`users/${uid}/products/${id}`).once('value');
+            const p = snap.val();
+            if(p.sizes[sIdx].count > 0) {
+                p.sizes[sIdx].count--;
+                await db.ref(`users/${uid}/products/${id}`).update(p);
+                const current = (await db.ref(`users/${uid}/profit`).once('value')).val() || 0;
+                await db.ref(`users/${uid}/profit`).set(current + p.price);
+            }
+        }
+
+        function del(id) { 
+            if(confirm("Өчүрүлсүнбү?")) db.ref(`users/${auth.currentUser.uid}/products/${id}`).remove(); 
+        }
+    </script>
+</body>
+</html>
